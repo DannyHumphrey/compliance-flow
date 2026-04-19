@@ -67,7 +67,7 @@ Three separate deliverables sharing a single API:
                     │ HTTPS / JWT
                     ▼
          ┌──────────────────────┐
-         │   .NET 8 Web API     │
+         │   .NET 10 Web API    │
          │  (Clean Architecture)│
          └──────────┬───────────┘
                     │
@@ -79,7 +79,7 @@ Three separate deliverables sharing a single API:
 
 ---
 
-## 1. Backend API (.NET 8)
+## 1. Backend API (.NET 10)
 
 ### Solution Structure — Clean Architecture
 
@@ -100,8 +100,8 @@ ComplianceApp.sln
 
 | Concern | Technology |
 |---------|-----------|
-| Framework | ASP.NET Core 8 |
-| ORM | EF Core 8 |
+| Framework | ASP.NET Core 10 |
+| ORM | EF Core 10 |
 | Database | PostgreSQL 16 with JSONB |
 | Mediator | MediatR |
 | Validation | FluentValidation |
@@ -403,7 +403,7 @@ Listed here so they don't sneak in:
 Three separate repositories, each independently deployable:
 
 ```
-compliance-api/         # .NET 8 Web API
+compliance-api/         # .NET 10 Web API
 compliance-web/         # React admin/ops app
 compliance-mobile/      # React Native app (Expo)
 ```

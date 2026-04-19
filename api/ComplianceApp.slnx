@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ComplianceApp.Api/ComplianceApp.Api.csproj" />
+    <Project Path="src/ComplianceApp.Application/ComplianceApp.Application.csproj" />
+    <Project Path="src/ComplianceApp.Domain/ComplianceApp.Domain.csproj" />
+    <Project Path="src/ComplianceApp.Infrastructure/ComplianceApp.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ComplianceApp.Api.IntegrationTests/ComplianceApp.Api.IntegrationTests.csproj" />
+    <Project Path="tests/ComplianceApp.Application.Tests/ComplianceApp.Application.Tests.csproj" />
+    <Project Path="tests/ComplianceApp.Domain.Tests/ComplianceApp.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
