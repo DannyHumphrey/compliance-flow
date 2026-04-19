@@ -15,7 +15,7 @@ Guidance for Claude Code when working in this codebase. Read alongside `PROJECT.
 
 ---
 
-## Backend — .NET 8 API
+## Backend — .NET 10 API
 
 ### Architecture — Clean Architecture + CQRS
 
