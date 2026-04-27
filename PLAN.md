@@ -46,27 +46,32 @@ See [PROJECT.md](PROJECT.md) for *what* we're building and [CLAUDE.md](CLAUDE.md
 - `Application.DependencyInjection.AddApplication()` registers MediatR + validators-from-assembly + behaviours in order: Logging → Validation → Performance → Transaction → Handler
 - 8 tests across `ValidationBehaviour`, `TransactionBehaviour`, `LoggingBehaviour`
 
-### ✅ T6 — JWT auth + dev token issuer *(this PR)*
+### ✅ T6 — JWT auth + dev token issuer *(merged in [#4](https://github.com/DannyHumphrey/compliance-flow/pull/4))*
 - `ICurrentUserService` in Application — exposes `UserId`, `OrganisationId`, `IsAuthenticated`
 - `CurrentUserService` in Infrastructure — reads `sub` + `custom:organisationId` claims via `IHttpContextAccessor`
 - `ComplianceAppClaimTypes` — single source of truth for claim names shared by issuer + resolver
 - `DevAuthOptions` — bound from the `DevAuth` config section, validated at startup, refuses `Enabled=true` outside Development
-- `DevTokenIssuer` — issues HS256 JWTs from the dev symmetric key, includes `sub`, `custom:organisationId`, `jti`, sliding lifetime
-- `Infrastructure.DependencyInjection.AddInfrastructure(config, env)` registers JWT bearer auth (with `MapInboundClaims = false` so `sub` stays `sub`), the current-user resolver, and conditionally the dev token issuer
-- `AuthController` (`POST /api/auth/dev-token`) issues tokens; returns 404 when DevAuth is disabled
-- `MeController` (`GET /api/me`, `[Authorize]`) — round-trip diagnostic endpoint
-- 3 integration tests against `WebApplicationFactory<Program>`: 401 without token, full token-issue → `/api/me` round-trip, distinct tokens for distinct users
+- `DevTokenIssuer` — issues HS256 JWTs from the dev symmetric key
+- JWT bearer scheme registered with `MapInboundClaims = false` so `sub` stays `sub`
+- `AuthController` (`POST /api/auth/dev-token`) and `MeController` (`GET /api/me`, `[Authorize]`)
+- 3 integration tests against `WebApplicationFactory<Program>`
+
+### ✅ T7 — EF Core + initial migration *(this PR)*
+- `ComplianceType` domain entity with `CreateSystem` / `CreateForOrganisation` factories — straddles the system/tenant boundary so it does NOT implement `ITenantOwned` (its `OrganisationId` is nullable)
+- `IApplicationDbContext` in Application exposing `DbSet<ComplianceType>` + `SaveChangesAsync`
+- `ApplicationDbContext` in Infrastructure:
+  - Applies entity configurations from the assembly
+  - **Global query filter** auto-applied to every `ITenantOwned` entity via reflection over the model — drops to `OrganisationId = Guid.Empty` for unauthenticated requests so they return zero rows from tenant-owned tables
+- `AuditableEntityInterceptor` (registered with the DbContext) stamps `CreatedAt` / `UpdatedAt` on every `BaseEntity` save and `OrganisationId` on new `ITenantOwned` rows when missing
+- `UnitOfWork` implements the T5 abstraction on top of `DbContext.Database.BeginTransactionAsync`
+- `ComplianceTypeConfiguration` — `compliance_types` table, unique index on `(OrganisationId, Code)`
+- **Initial migration** generated via `dotnet ef migrations add InitialCreate` — creates the `compliance_types` table
+- 12 Domain tests (now incl. 7 for `ComplianceType`)
+- 5 new integration tests against Testcontainers Postgres: migration applies cleanly, interceptor stamps `CreatedAt` / `UpdatedAt` / `OrganisationId`, query filter isolates rows, `IgnoreQueryFilters` lets admin paths bypass
 
 ---
 
 ## Remaining Phase 1 work (in execution order)
-
-### 🔲 T7 — EF Core + initial migration
-- `IApplicationDbContext` interface in Application
-- `ApplicationDbContext` in Infrastructure with global query filter for `ITenantOwned`, wired to `ICurrentUserService`
-- `SaveChanges` interceptor stamps `CreatedAt`/`UpdatedAt` and `OrganisationId` on new entities
-- First migration creates `ComplianceType` table (root entity for T8 seeding)
-- Testcontainers integration test confirms migration applies and tenant filter isolates data
 
 ### 🔲 T8 — ComplianceType seed data
 - Seeder inserts system types (EICR, Gas Safety, Fire Risk, Damp & Mould, Legionella) with null `OrganisationId`
