@@ -27,8 +27,8 @@ See [PROJECT.md](PROJECT.md) for *what* we're building and [CLAUDE.md](CLAUDE.md
 - `.gitignore` + `Program` exposed as `public partial class` for `WebApplicationFactory<Program>`
 - Build clean (0 errors)
 
-### ✅ T3 — Domain base classes *(this PR)*
-- `BaseEntity` — `Id`, `CreatedAt`, `UpdatedAt` with `protected set` (infrastructure interceptor will stamp timestamps in T5)
+### ✅ T3 — Domain base classes *(merged in [#2](https://github.com/DannyHumphrey/compliance-flow/pull/2))*
+- `BaseEntity` — `Id`, `CreatedAt`, `UpdatedAt` with `protected set` (infrastructure interceptor will stamp timestamps in T7)
 - `ITenantOwned` — marker interface exposing `OrganisationId`
 - `TenantOwnedEntity` — `BaseEntity` + `ITenantOwned`
 - `DomainException` — message + inner-exception constructors
@@ -36,14 +36,19 @@ See [PROJECT.md](PROJECT.md) for *what* we're building and [CLAUDE.md](CLAUDE.md
 
 > *T2 was folded into T1; kept the numbering anyway for traceability against earlier plan.*
 
+### ✅ T5 — MediatR pipeline behaviours *(this PR)*
+- `ICommand<TResponse>` / `IQuery<TResponse>` markers under `Application/Common/Messaging` — give us a way to route commands through `TransactionBehaviour` while leaving queries untouched
+- `IUnitOfWork` + `IUnitOfWorkTransaction` abstraction under `Application/Common/Persistence`; T7 implements on EF Core so Application stays free of EF Core types
+- `LoggingBehaviour` — logs request start/completion at Info, failure at Error (outermost in the pipeline)
+- `ValidationBehaviour` — runs all registered `IValidator<TRequest>`, aggregates failures, throws `FluentValidation.ValidationException`
+- `PerformanceBehaviour` — warns when a handler exceeds 500 ms (threshold exposed as a const for future tuning)
+- `TransactionBehaviour` — generic-constrained to `ICommand<TResponse>` so MediatR only constructs it for commands; queries skip it for free
+- `Application.DependencyInjection.AddApplication()` registers MediatR + validators-from-assembly + behaviours in order: Logging → Validation → Performance → Transaction → Handler
+- 8 tests across `ValidationBehaviour` (no validators / valid / invalid / multi-validator aggregation), `TransactionBehaviour` (commit on success, rollback + dispose on failure), and `LoggingBehaviour` (info on success, error on throw)
+
 ---
 
 ## Remaining Phase 1 work (in execution order)
-
-### 🔲 T5 — MediatR pipeline behaviours
-`LoggingBehaviour`, `ValidationBehaviour`, `PerformanceBehaviour`, `TransactionBehaviour` registered in that order.
-- Unit tests for `ValidationBehaviour` (throws on invalid, passes through on valid)
-- Depends on: Application DI registration stub
 
 ### 🔲 T6 — JWT auth + dev token issuer
 - `ICurrentUserService` (Application) with `UserId` + `OrganisationId`
