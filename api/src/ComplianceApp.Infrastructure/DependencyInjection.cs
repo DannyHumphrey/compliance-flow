@@ -1,8 +1,12 @@
 using System.Text;
 using ComplianceApp.Application.Common.Authentication;
+using ComplianceApp.Application.Common.Persistence;
 using ComplianceApp.Infrastructure.Authentication;
+using ComplianceApp.Infrastructure.Persistence;
+using ComplianceApp.Infrastructure.Persistence.Interceptors;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -13,9 +17,10 @@ namespace ComplianceApp.Infrastructure;
 public static class DependencyInjection
 {
     /// <summary>
-    /// Wires Infrastructure services: current-user resolver, JWT bearer auth,
-    /// and (in Development) the dev token issuer. Refuses to start if dev auth
-    /// is enabled outside Development.
+    /// Wires Infrastructure services: persistence (EF Core + Postgres),
+    /// the current-user resolver, JWT bearer auth, and the dev token
+    /// issuer (Development only). Refuses to start if dev auth is enabled
+    /// outside Development.
     /// </summary>
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
@@ -26,7 +31,36 @@ public static class DependencyInjection
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<ICurrentUserService, CurrentUserService>();
 
-        // Bind + validate DevAuthOptions
+        AddPersistence(services, configuration);
+        AddDevAuth(services, configuration, environment);
+        AddJwtBearer(services, configuration, environment);
+
+        services.AddAuthorization();
+
+        return services;
+    }
+
+    private static void AddPersistence(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddScoped<AuditableEntityInterceptor>();
+
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+        services.AddDbContext<ApplicationDbContext>((sp, options) =>
+        {
+            options.UseNpgsql(connectionString);
+            options.AddInterceptors(sp.GetRequiredService<AuditableEntityInterceptor>());
+        });
+
+        services.AddScoped<IApplicationDbContext>(sp => sp.GetRequiredService<ApplicationDbContext>());
+        services.AddScoped<IUnitOfWork, UnitOfWork>();
+    }
+
+    private static void AddDevAuth(
+        IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment)
+    {
         services
             .AddOptions<DevAuthOptions>()
             .Bind(configuration.GetSection(DevAuthOptions.SectionName))
@@ -36,13 +70,24 @@ public static class DependencyInjection
                 "DevAuth.Enabled must be false outside the Development environment.")
             .ValidateOnStart();
 
-        var devAuthSection = configuration.GetSection(DevAuthOptions.SectionName);
-        var devAuthOptions = devAuthSection.Get<DevAuthOptions>() ?? new DevAuthOptions();
+        var devAuthOptions =
+            configuration.GetSection(DevAuthOptions.SectionName).Get<DevAuthOptions>()
+            ?? new DevAuthOptions();
 
         if (devAuthOptions.Enabled)
         {
             services.AddSingleton<IDevTokenIssuer, DevTokenIssuer>();
         }
+    }
+
+    private static void AddJwtBearer(
+        IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment)
+    {
+        var devAuthOptions =
+            configuration.GetSection(DevAuthOptions.SectionName).Get<DevAuthOptions>()
+            ?? new DevAuthOptions();
 
         services
             .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -68,9 +113,5 @@ public static class DependencyInjection
                     NameClaimType = ComplianceAppClaimTypes.Subject,
                 };
             });
-
-        services.AddAuthorization();
-
-        return services;
     }
 }
