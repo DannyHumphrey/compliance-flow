@@ -36,7 +36,7 @@ See [PROJECT.md](PROJECT.md) for *what* we're building and [CLAUDE.md](CLAUDE.md
 
 > *T2 was folded into T1; kept the numbering anyway for traceability against earlier plan.*
 
-### ✅ T5 — MediatR pipeline behaviours *(this PR)*
+### ✅ T5 — MediatR pipeline behaviours *(merged in [#3](https://github.com/DannyHumphrey/compliance-flow/pull/3))*
 - `ICommand<TResponse>` / `IQuery<TResponse>` markers under `Application/Common/Messaging` — give us a way to route commands through `TransactionBehaviour` while leaving queries untouched
 - `IUnitOfWork` + `IUnitOfWorkTransaction` abstraction under `Application/Common/Persistence`; T7 implements on EF Core so Application stays free of EF Core types
 - `LoggingBehaviour` — logs request start/completion at Info, failure at Error (outermost in the pipeline)
@@ -44,18 +44,22 @@ See [PROJECT.md](PROJECT.md) for *what* we're building and [CLAUDE.md](CLAUDE.md
 - `PerformanceBehaviour` — warns when a handler exceeds 500 ms (threshold exposed as a const for future tuning)
 - `TransactionBehaviour` — generic-constrained to `ICommand<TResponse>` so MediatR only constructs it for commands; queries skip it for free
 - `Application.DependencyInjection.AddApplication()` registers MediatR + validators-from-assembly + behaviours in order: Logging → Validation → Performance → Transaction → Handler
-- 8 tests across `ValidationBehaviour` (no validators / valid / invalid / multi-validator aggregation), `TransactionBehaviour` (commit on success, rollback + dispose on failure), and `LoggingBehaviour` (info on success, error on throw)
+- 8 tests across `ValidationBehaviour`, `TransactionBehaviour`, `LoggingBehaviour`
+
+### ✅ T6 — JWT auth + dev token issuer *(this PR)*
+- `ICurrentUserService` in Application — exposes `UserId`, `OrganisationId`, `IsAuthenticated`
+- `CurrentUserService` in Infrastructure — reads `sub` + `custom:organisationId` claims via `IHttpContextAccessor`
+- `ComplianceAppClaimTypes` — single source of truth for claim names shared by issuer + resolver
+- `DevAuthOptions` — bound from the `DevAuth` config section, validated at startup, refuses `Enabled=true` outside Development
+- `DevTokenIssuer` — issues HS256 JWTs from the dev symmetric key, includes `sub`, `custom:organisationId`, `jti`, sliding lifetime
+- `Infrastructure.DependencyInjection.AddInfrastructure(config, env)` registers JWT bearer auth (with `MapInboundClaims = false` so `sub` stays `sub`), the current-user resolver, and conditionally the dev token issuer
+- `AuthController` (`POST /api/auth/dev-token`) issues tokens; returns 404 when DevAuth is disabled
+- `MeController` (`GET /api/me`, `[Authorize]`) — round-trip diagnostic endpoint
+- 3 integration tests against `WebApplicationFactory<Program>`: 401 without token, full token-issue → `/api/me` round-trip, distinct tokens for distinct users
 
 ---
 
 ## Remaining Phase 1 work (in execution order)
-
-### 🔲 T6 — JWT auth + dev token issuer
-- `ICurrentUserService` (Application) with `UserId` + `OrganisationId`
-- `CurrentUserService` (Infrastructure) reading `sub` + `custom:organisationId` from JWT claims
-- JWT bearer middleware in Api, **dev issuer** gated to `Development` (option A — short-lived tokens signed with a dev symmetric key)
-- `AuthController` exposing a dev-only `/api/auth/dev-token` endpoint
-- Integration test using the dev issuer proves tenant resolution
 
 ### 🔲 T7 — EF Core + initial migration
 - `IApplicationDbContext` interface in Application
